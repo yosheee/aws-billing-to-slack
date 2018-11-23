@@ -14,6 +14,8 @@ TARGET_CURRENCY = os.environ['TARGET_CURRENCY']
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
+ce = boto3.client('ce', region_name='us-east-1')
+
 
 def convert_currency(source_price: float, source_currency: str, destination_currency: str) -> float:
     rate = get_rate(source_currency, destination_currency)
@@ -34,7 +36,6 @@ def get_rate(base: str, to: str) -> float:
 def get_cost_and_usage(start_date: str, end_date: str) -> List[Any]:
     results = []
     next_page_token = None
-    ce = boto3.client('ce', region_name='us-east-1')
     try:
 
         while True:
@@ -67,9 +68,13 @@ def get_cost_and_usage(start_date: str, end_date: str) -> List[Any]:
             if next_page_token is None:
                 break
 
+        logger.debug('Success to get AWS cost and usage')
+
         return results
     except ClientError as e:
-        pass
+        logger.warning(e)
+
+        raise Exception('Encountered AWS exception')
 
 
 def generate_slack_fields(service_costs: Dict[str, float]):
@@ -101,18 +106,23 @@ def post_to_slack(result) -> NoReturn:
         response = requests.post(SLACK_WEBHOOK_URL, slack_message)
         body = response.json()
         if body['ok']:
-            logger.info('Success post to slack.')
+            logger.info('Complete sending billing report to Slack')
         else:
-            logger.error(body['error'])
+            logger.error('Failed to send Slack Error: ${}'.format(body['error']))
 
-    except requests.exceptions.HTTPError as err:
-        pass
+    except requests.exceptions.HTTPError as e:
+        logger.error('connect - HTTP error: {}'.format(e))
 
-    except requests.exceptions.RequestException as err:
-        pass
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error('connect - Request error: {}'.format(e))
+
+        return None
 
 
 def lambda_handler(event, context) -> NoReturn:
+    logger.info('Initiate AWS billing reporter to slack')
+
     now = datetime.now()
     start_date_str = datetime(now.year, now.month, 1).strftime('%Y-%m-%d')
     current_date_str = now.strftime('%Y-%m-%d')
