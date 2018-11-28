@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import datetime
+from functools import reduce
 from typing import Any, Dict, List, NoReturn
 
 import boto3
@@ -60,7 +61,8 @@ def get_cost_and_usage(start_date: str, end_date: str) -> List[Any]:
                 **kwargs
             )
 
-            groups = query_result['ResultsByTime']['Groups']
+            results_by_time = query_result['ResultsByTime']
+            groups = reduce(lambda a, b: a + b, [result.get('Groups') for result in results_by_time])
             for group in groups:
                 logger.info(group)
                 results.append(group)
@@ -103,13 +105,12 @@ def post_to_slack(result) -> NoReturn:
     }
 
     try:
-        response = requests.post(SLACK_WEBHOOK_URL, slack_message)
-        body = response.json()
-        if body['ok']:
+        response = requests.post(SLACK_WEBHOOK_URL, json=slack_message)
+        if response.status_code == 200:
             logger.info('Complete sending billing report to Slack')
         else:
-            logger.error('Failed to send Slack Error: ${}'.format(body['error']))
-
+            logger.info('Failed to send Slack Error {"status_code": ${}, "error": ${}}'.format(response.status_code,
+                                                                                               response.text))
     except requests.exceptions.HTTPError as e:
         logger.error('connect - HTTP error: {}'.format(e))
 

@@ -20,9 +20,9 @@ Resources:
   AwsBillingReporterLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: app.lambda_handler
+      Handler: aws_billing_to_slack.lambda_handler
       Runtime: python3.6
-      CodeUri: package.zip
+      CodeUri: target/build
       FunctionName: aws-billing-report-to-slack-handler
       Description: |
         Lambda function that sends AWS billing report to your Slack channel.
